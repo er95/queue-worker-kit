@@ -51,7 +51,7 @@ This kit standardises those decisions in one place. It does **not** wrap BullMQ 
 - **Graceful shutdown** with ordered steps, a hard deadline and idempotent signal handling
 - **Cooperative job timeouts** via `AbortSignal`
 - **Bull Board** behind constant-time basic auth, opt-in
-- **274 tests**, integration ones against a real Redis
+- **275 tests**, integration ones against a real Redis
 - **Multi-stage Dockerfile**, non-root, production dependencies only
 
 ---
