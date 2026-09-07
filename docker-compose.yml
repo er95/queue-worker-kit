@@ -1,0 +1,128 @@
+# Local stack: Redis, the API (producer) and a worker.
+#
+# The API and the worker are the same image with different commands, which is
+# how they are meant to be deployed: separate processes that scale and shut down
+# independently.
+#
+#   docker compose up -d --build
+#   curl --fail http://localhost:3000/health/ready
+
+name: queue-worker-kit
+
+services:
+  redis:
+    # Redis 8.2 is the current stable line. Pinned to a minor so a rebuild does
+    # not silently move to a new major.
+    image: redis:8.2-alpine
+    restart: unless-stopped
+    # No published port on purpose. The app reaches Redis over the container
+    # network, and plenty of developers already run a Redis on 6379, which would
+    # make this stack fail to start. Inspect it without publishing anything:
+    #
+    #   docker compose exec redis redis-cli
+    #
+    # Add `ports: ['127.0.0.1:6379:6379']` if you need host access, and keep the
+    # loopback prefix: Docker's default 0.0.0.0 bypasses host firewall rules.
+    command:
+      - redis-server
+      - --appendonly
+      - 'yes'
+      # A queue is state, not a cache. `noeviction` makes Redis reject writes
+      # when it hits maxmemory instead of quietly deleting job keys, which is
+      # the difference between backpressure and silent data loss.
+      - --maxmemory-policy
+      - noeviction
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      # Not just "is the container running": this waits until Redis answers.
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  api:
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    ports:
+      # Loopback only, so a local stack is not published to the network. Change
+      # to '3000:3000' when you actually intend to serve external traffic.
+      - '127.0.0.1:3000:3000'
+    environment:
+      NODE_ENV: production
+      # Service DNS, never localhost: inside a container, localhost is the
+      # container itself.
+      REDIS_URL: redis://redis:6379
+      LOG_LEVEL: info
+      QUEUE_PREFIX: qwk
+      # Off unless you opt in. Deliberately not a committed default: a password
+      # in a public repository is a public password, and because this service
+      # runs with NODE_ENV=production it would sail past the config check that
+      # exists to stop exactly that.
+      #
+      # To enable, put both in .env (Compose interpolates them):
+      #   ENABLE_BULL_BOARD=true
+      #   BULL_BOARD_USERNAME=ops
+      #   BULL_BOARD_PASSWORD=<16+ chars, not a known example>
+      ENABLE_BULL_BOARD: ${ENABLE_BULL_BOARD:-false}
+      BULL_BOARD_USERNAME: ${BULL_BOARD_USERNAME:-}
+      BULL_BOARD_PASSWORD: ${BULL_BOARD_PASSWORD:-}
+    depends_on:
+      redis:
+        # Waits for the healthcheck, not merely for the container to exist.
+        condition: service_healthy
+    # Docker's built-in init (tini) as PID 1, so zombies are reaped. Node still
+    # receives SIGTERM itself and runs its own shutdown sequence.
+    init: true
+    command: ['node', 'dist/api/server.js']
+
+  worker:
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      REDIS_URL: redis://redis:6379
+      LOG_LEVEL: info
+      QUEUE_PREFIX: qwk
+      # Per process, so `docker compose up --scale worker=3` gives up to 30
+      # concurrent jobs in total.
+      WORKER_CONCURRENCY: '10'
+      WORKER_RATE_LIMIT_MAX: '100'
+      WORKER_RATE_LIMIT_DURATION_MS: '1000'
+      ENABLE_JOB_SCHEDULERS: 'true'
+      # The worker records the job lifecycle counters, so it needs its own
+      # scrape endpoint: the API only knows what it enqueued.
+      ENABLE_WORKER_METRICS_SERVER: 'true'
+      WORKER_METRICS_PORT: '9090'
+    ports:
+      # Internal port, loopback only. Prometheus should reach this over the
+      # container network, not a published one.
+      - '127.0.0.1:9090:9090'
+    depends_on:
+      redis:
+        condition: service_healthy
+    init: true
+    # The image's healthcheck targets the API's port, so the worker overrides it
+    # to hit its own metrics server instead.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:9090/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    # Time for in-flight jobs to finish before Docker escalates to SIGKILL.
+    # Keep this above SHUTDOWN_TIMEOUT_MS (30s by default).
+    stop_grace_period: 40s
+    command: ['node', 'dist/worker/server.js']
+
+volumes:
+  redis-data:
