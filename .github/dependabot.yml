@@ -1,0 +1,36 @@
+version: 2
+
+updates:
+  # Weekly, not daily: a queue starter has a small dependency tree, and daily
+  # runs produce more noise than signal.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # Tooling moves together and is not shipped in the runtime image, so one
+      # PR per week is enough for all of it.
+      dev-dependencies:
+        dependency-type: development
+        update-types: [minor, patch]
+      # Runtime patches are low-risk and reviewed as a batch; majors still
+      # arrive as individual PRs.
+      production-patches:
+        dependency-type: production
+        update-types: [patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
