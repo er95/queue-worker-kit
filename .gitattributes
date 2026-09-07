@@ -1,2 +1,10 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Normalise to LF in the repository, and check out LF on every platform.
+#
+# `text=auto` alone stores LF but checks out CRLF on Windows, which makes
+# Prettier (whose endOfLine default is "lf") fail on a fresh clone there while
+# CI on Linux passes. `eol=lf` keeps the working tree consistent everywhere and
+# matches end_of_line = lf in .editorconfig.
+* text=auto eol=lf
+
+# Generated and never worth diffing by hand.
+pnpm-lock.yaml linguist-generated=true -diff
