@@ -43,7 +43,7 @@ jobs:
       TEST_REDIS_URL: redis://127.0.0.1:6379
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # Before actions/setup-node, so the pnpm cache directory exists for it to
       # key against. The version comes from `packageManager` in package.json.
@@ -80,7 +80,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: docker/setup-buildx-action@v3
 
