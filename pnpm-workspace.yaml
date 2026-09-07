@@ -1,0 +1,9 @@
+# Neither package needs its install script to work here:
+#   - esbuild ships its platform binary via an optional dependency
+#     (@esbuild/win32-x64 etc.), so the postinstall is not required.
+#   - msgpackr-extract is an optional native accelerator for msgpackr
+#     (a BullMQ dependency), which falls back to a pure-JS implementation.
+# Keeping both disabled means `pnpm install` runs no native build scripts.
+allowBuilds:
+  esbuild: false
+  msgpackr-extract: false
