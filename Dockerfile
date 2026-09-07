@@ -9,7 +9,7 @@
 # only native dependency (msgpackr-extract) is an optional accelerator with a
 # pure-JS fallback. Reach for `node:24-slim` if you add a package that does
 # build against glibc.
-FROM node:24-alpine AS base
+FROM node:26-alpine AS base
 ENV PNPM_HOME=/pnpm \
     PATH=/pnpm:$PATH \
     # Corepack must not stop and ask whether it may download pnpm.
@@ -49,7 +49,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
 
 
 # --- Runtime ----------------------------------------------------------------
-FROM node:24-alpine AS runner
+FROM node:26-alpine AS runner
 
 ENV NODE_ENV=production \
     # Bind all interfaces: the container's own network namespace is the boundary.
